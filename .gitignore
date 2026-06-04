@@ -1,0 +1,22 @@
+# Build Folders
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# User Settings / Caches
+.vscode/
+*.user
+imgui.ini
+.vs/
+.idea/
+
+# Local cache/download artifacts
+artifacts/linux-x64/
+artifacts/osx-x64/
+artifacts/win-x64/
+/artifacts/
+
+# OS Files
+.DS_Store
+Thumbs.db

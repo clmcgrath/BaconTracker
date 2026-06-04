@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="BaconTracker.App/BaconTracker.App.csproj" />
+  <Project Path="BaconTracker.Core/BaconTracker.Core.csproj" />
+  <Project Path="BaconTracker.PatchGenerator/BaconTracker.PatchGenerator.csproj" />
+  <Project Path="BaconTracker.Build/BaconTracker.Build.csproj" />
+</Solution>
