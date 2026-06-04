@@ -14,17 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Essential for MinVer version calculation
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
       - name: Cache NuGet Packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.Build.csproj', '**/*.slnx') }}
@@ -35,25 +35,25 @@ jobs:
         run: dotnet run --project BaconTracker.Build --target Default
 
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BaconTracker-Windows-x64
           path: artifacts/BaconTracker-Windows-x64.zip
 
       - name: Upload Linux Tarball Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BaconTracker-Linux-x64-Tarball
           path: artifacts/BaconTracker-Linux-x64.tar.gz
 
       - name: Upload Debian Package Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BaconTracker-Linux-x64-Debian
           path: artifacts/BaconTracker-Linux-x64.deb
 
       - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BaconTracker-Mac-x64
           path: artifacts/BaconTracker-Mac-x64.tar.gz
