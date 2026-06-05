@@ -122,8 +122,6 @@ ScreenPrinting=false
         {
             try
             {
-                long lastLength = 0;
-
                 // Wait for Power.log to be created by the game client
                 while (_isRunning && !File.Exists(filePath))
                 {
@@ -132,14 +130,16 @@ ScreenPrinting=false
 
                 if (!_isRunning) return;
 
+                long startOffset = FindLastCreateGameOffset(filePath);
+                _logger.LogInformation("Seeking in Power.log to offset {Offset} to rebuild active game state...", startOffset);
+
                 using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                fs.Seek(startOffset, SeekOrigin.Begin);
+
                 using var reader = new StreamReader(fs, Encoding.UTF8);
+                long lastLength = fs.Length;
 
-                // Seek to the end of the file to ignore old historical sessions
-                fs.Seek(0, SeekOrigin.End);
-                lastLength = fs.Length;
-
-                _logger.LogInformation("Tailer started. Waiting for game updates...");
+                _logger.LogInformation("Tailer started. Replaying active match logs and waiting for game updates...");
 
                 while (_isRunning)
                 {
@@ -172,6 +172,77 @@ ScreenPrinting=false
             Name = "LogWatcherTailerThread"
         };
         _thread.Start();
+    }
+
+    private long FindLastCreateGameOffset(string filePath)
+    {
+        try
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            long fileSize = fs.Length;
+            if (fileSize == 0) return 0;
+
+            byte[] searchPattern = Encoding.UTF8.GetBytes("CREATE_GAME");
+            int patternLen = searchPattern.Length;
+
+            int bufferSize = 8192;
+            byte[] buffer = new byte[bufferSize];
+            long offset = fileSize;
+
+            while (offset > 0)
+            {
+                long readStart = Math.Max(0, offset - bufferSize);
+                int bytesToRead = (int)(offset - readStart);
+
+                fs.Seek(readStart, SeekOrigin.Begin);
+                int read = fs.Read(buffer, 0, bytesToRead);
+
+                for (int i = read - patternLen; i >= 0; i--)
+                {
+                    bool match = true;
+                    for (int j = 0; j < patternLen; j++)
+                    {
+                        if (buffer[i + j] != searchPattern[j])
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+
+                    if (match)
+                    {
+                        // Find the start of the line containing CREATE_GAME by scanning back for newline
+                        long lineStartOffset = readStart + i;
+                        long lookbackStart = Math.Max(0, lineStartOffset - 512);
+                        int bytesToLookback = (int)(lineStartOffset - lookbackStart);
+                        
+                        if (bytesToLookback > 0)
+                        {
+                            fs.Seek(lookbackStart, SeekOrigin.Begin);
+                            byte[] lookbackBuffer = new byte[bytesToLookback];
+                            int lookbackRead = fs.Read(lookbackBuffer, 0, bytesToLookback);
+                            for (int k = lookbackRead - 1; k >= 0; k--)
+                            {
+                                if (lookbackBuffer[k] == '\n' || lookbackBuffer[k] == '\r')
+                                {
+                                    return lookbackStart + k + 1;
+                                }
+                            }
+                        }
+                        return lineStartOffset;
+                    }
+                }
+
+                offset = readStart + patternLen;
+                if (readStart == 0) break;
+            }
+            return fileSize;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error seeking for last CREATE_GAME tag");
+            return 0;
+        }
     }
 
     private void ProcessLogLine(string line)
