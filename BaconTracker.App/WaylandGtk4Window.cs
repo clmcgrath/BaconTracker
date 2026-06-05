@@ -354,6 +354,7 @@ public class WaylandGtk4Window : IOverlayWindow
         // Initialize panels (C# Native)
         new LobbyAnalystPanel().Register();
         new MinionBrowserPanel().Register();
+        new BoardHistoryPanel(_gameState).Register();
 
         // Load and Register Lua Scripted Panels (Unified Registry Pattern)
         _pluginManager.LoadPlugins();

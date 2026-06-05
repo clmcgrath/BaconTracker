@@ -80,6 +80,21 @@ public class LobbyAnalystPanel : OverlayPanel
 
                 // Col 1: Opponent Name / Hero
                 ImGui.TableSetColumnIndex(0);
+                
+                ImGui.PushID($"BoardBtn_{opponent.Name}");
+                if (ImGui.Button("👁"))
+                {
+                    BoardHistoryPanel.Instance.SelectedOpponentName = opponent.Name;
+                    BoardHistoryPanel.Instance.IsVisible = true;
+                    ImGui.SetWindowFocus("Opponent Board History");
+                }
+                ImGui.PopID();
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("View opponent's last seen board");
+                }
+                ImGui.SameLine();
+
                 string displayLabel = opponent.HeroName != "Unknown Hero" ? opponent.HeroName : opponent.Name;
                 ImGui.Text(displayLabel);
                 if (ImGui.IsItemHovered() && opponent.HeroName != "Unknown Hero")

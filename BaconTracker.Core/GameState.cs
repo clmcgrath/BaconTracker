@@ -45,6 +45,7 @@ public class GameState
 
     // Track opponents in the current lobby
     public Dictionary<string, OpponentInfo> Opponents { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _lastBoardUpdateTurns = new(StringComparer.OrdinalIgnoreCase);
 
     public GameState()
     {
@@ -147,6 +148,36 @@ public class GameState
                     var opponent = GetOrCreateOpponent(name);
                     if (health != -1) opponent.Health = health;
                     if (armor != -1) opponent.Armor = armor;
+                }
+            }
+        });
+
+        // 10. Update opponent board minions
+        EventBus.Subscribe("OnMinionBoardSummon", args => {
+            if (args.Length > 1 && args[0] is string name && args[1] is string cardId)
+            {
+                int turn = CurrentTurn;
+                
+                // We only track opponent boards for sidebar hover display
+                if (name != "GameEntity" && !name.Contains("Player") && name != "1" &&
+                    (string.IsNullOrEmpty(LocalPlayerName) || !name.Equals(LocalPlayerName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var opponent = GetOrCreateOpponent(name);
+                    var board = opponent.KnownBoardMinions;
+                    
+                    // If this is the first minion seen for this opponent in this turn, clear their board list
+                    string key = opponent.Name;
+                    if (!_lastBoardUpdateTurns.TryGetValue(key, out int lastTurn) || lastTurn < turn)
+                    {
+                        board.Clear();
+                        _lastBoardUpdateTurns[key] = turn;
+                    }
+                    
+                    // Add minion if not already present
+                    if (!board.Contains(cardId))
+                    {
+                        board.Add(cardId);
+                    }
                 }
             }
         });

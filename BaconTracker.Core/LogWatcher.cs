@@ -27,6 +27,8 @@ public class LogWatcher : IDisposable
     private int _currentEntityId = -1;
     private string _currentCardId = string.Empty;
     private string _localPlayerName = string.Empty;
+    private bool _currentEntityIsPlay = false;
+    private bool _currentEntityIsMinion = false;
 
     private readonly WinePrefixDetector _prefixDetector;
     private readonly ILogger<LogWatcher> _logger;
@@ -316,6 +318,14 @@ ScreenPrinting=false
                         _entityControllers[_currentEntityId] = ctrlId;
                         TriggerHeroAssignment(_currentEntityId);
                     }
+                    else if (innerTag == "ZONE" && innerVal == "PLAY")
+                    {
+                        _currentEntityIsPlay = true;
+                    }
+                    else if (innerTag == "CARDTYPE" && innerVal == "MINION")
+                    {
+                        _currentEntityIsMinion = true;
+                    }
                 }
             }
             return;
@@ -324,8 +334,17 @@ ScreenPrinting=false
         // Reset creation context on any other non-indented log line
         if (!line.StartsWith(" ") && !line.StartsWith("\t"))
         {
-            _currentEntityId = -1;
-            _currentCardId = string.Empty;
+            lock (_entityCardIds)
+            {
+                if (_currentEntityId != -1 && _currentEntityIsPlay && _currentEntityIsMinion)
+                {
+                    TriggerMinionBoardSummon(_currentEntityId);
+                }
+                _currentEntityId = -1;
+                _currentCardId = string.Empty;
+                _currentEntityIsPlay = false;
+                _currentEntityIsMinion = false;
+            }
         }
 
         // 5. Parse tag changes (Turns, Gold, stats, etc.)
@@ -353,6 +372,19 @@ ScreenPrinting=false
             if (playerName != null && cardId != null)
             {
                 EventBus.Publish("OnPlayerHeroSelected", playerName, cardId);
+            }
+        }
+    }
+
+    private void TriggerMinionBoardSummon(int minionEntityId)
+    {
+        if (_entityControllers.TryGetValue(minionEntityId, out int playerEntityId) &&
+            _playerNames.TryGetValue(playerEntityId, out string? playerName) &&
+            _entityCardIds.TryGetValue(minionEntityId, out string? cardId))
+        {
+            if (playerName != null && cardId != null)
+            {
+                EventBus.Publish("OnMinionBoardSummon", playerName, cardId, minionEntityId);
             }
         }
     }
