@@ -66,7 +66,7 @@ public class BoardHistoryPanel : OverlayPanel
             if (card == null) continue;
 
             // Get texture pointer from AssetManager
-            IntPtr texId = AssetManager.Instance.GetCardArt(cardId);
+            IntPtr texId = AssetManager.Instance.GetMinionPortrait(cardId);
             Vector2 cursor = ImGui.GetCursorScreenPos();
             Vector2 size = new Vector2(cardWidth, cardHeight);
 

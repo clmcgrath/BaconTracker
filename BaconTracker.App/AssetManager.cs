@@ -203,7 +203,7 @@ public class AssetManager : IDisposable
         Telemetry.CardArtRequests.Add(1);
 
         // Try getting the golden or plain render directly
-        IntPtr tex = GetCardArtInternal(cardId);
+        IntPtr tex = GetCardArtInternal(cardId, false);
         if (tex != IntPtr.Zero)
         {
             Telemetry.CardArtCacheHits.Add(1);
@@ -215,7 +215,7 @@ public class AssetManager : IDisposable
         if (cardId.EndsWith("_G", StringComparison.OrdinalIgnoreCase))
         {
             string plainId = cardId.Substring(0, cardId.Length - 2);
-            IntPtr plainTex = GetCardArtInternal(plainId);
+            IntPtr plainTex = GetCardArtInternal(plainId, false);
             if (plainTex != IntPtr.Zero)
             {
                 Telemetry.CardArtCacheHits.Add(1);
@@ -226,13 +226,46 @@ public class AssetManager : IDisposable
         return IntPtr.Zero;
     }
 
-    private IntPtr GetCardArtInternal(string cardId)
+    /// <summary>
+    /// Gets the OpenGL texture pointer for the raw minion portrait, downloading it asynchronously if not cached.
+    /// </summary>
+    public IntPtr GetMinionPortrait(string cardId)
     {
         if (string.IsNullOrEmpty(cardId)) return IntPtr.Zero;
 
+        Telemetry.CardArtRequests.Add(1);
+
+        // Try getting the golden or plain portrait directly
+        IntPtr tex = GetCardArtInternal(cardId, true);
+        if (tex != IntPtr.Zero)
+        {
+            Telemetry.CardArtCacheHits.Add(1);
+            return tex;
+        }
+
+        if (cardId.EndsWith("_G", StringComparison.OrdinalIgnoreCase))
+        {
+            string plainId = cardId.Substring(0, cardId.Length - 2);
+            IntPtr plainTex = GetCardArtInternal(plainId, true);
+            if (plainTex != IntPtr.Zero)
+            {
+                Telemetry.CardArtCacheHits.Add(1);
+                return plainTex;
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private IntPtr GetCardArtInternal(string cardId, bool wantPortrait)
+    {
+        if (string.IsNullOrEmpty(cardId)) return IntPtr.Zero;
+
+        string downloadKey = cardId + (wantPortrait ? "_art" : "_render");
+
         lock (_failedDownloads)
         {
-            if (_failedDownloads.Contains(cardId))
+            if (_failedDownloads.Contains(downloadKey))
             {
                 return IntPtr.Zero;
             }
@@ -252,26 +285,23 @@ public class AssetManager : IDisposable
             }
         }
 
-        string renderPath = Path.Combine(_cacheDir, $"{cardId}.png");
-        string rawArtPath = Path.Combine(_cacheDir, $"{cardId}_art.png");
+        string targetPath = wantPortrait
+            ? Path.Combine(_cacheDir, $"{cardId}_art.png")
+            : Path.Combine(_cacheDir, $"{cardId}.png");
 
-        if (File.Exists(renderPath))
+        if (File.Exists(targetPath))
         {
-            return LoadTexture(renderPath);
-        }
-        if (File.Exists(rawArtPath))
-        {
-            return LoadTexture(rawArtPath);
+            return LoadTexture(targetPath);
         }
 
         // Not in cache, check if already downloading
         lock (_downloadingCards)
         {
-            if (_downloadingCards.Contains(cardId))
+            if (_downloadingCards.Contains(downloadKey))
             {
                 return IntPtr.Zero; // Return zero indicating loading
             }
-            _downloadingCards.Add(cardId);
+            _downloadingCards.Add(downloadKey);
         }
 
         // Start background download task
@@ -279,23 +309,26 @@ public class AssetManager : IDisposable
         {
             using var activity = Telemetry.Source.StartActivity("DownloadCardArt");
             activity?.SetTag("card.id", cardId);
+            activity?.SetTag("art.type", wantPortrait ? "portrait" : "render");
             Telemetry.CardArtCacheMisses.Add(1);
 
             using var client = new System.Net.Http.HttpClient();
-            bool success = await BaconTracker.Core.CardArtDownloader.DownloadCardArtAsync(client, cardId, _cacheDir);
+            bool success = wantPortrait
+                ? await BaconTracker.Core.CardArtDownloader.DownloadMinionPortraitAsync(client, cardId, _cacheDir)
+                : await BaconTracker.Core.CardArtDownloader.DownloadCardRenderAsync(client, cardId, _cacheDir);
 
             lock (_downloadingCards)
             {
-                _downloadingCards.Remove(cardId);
+                _downloadingCards.Remove(downloadKey);
             }
 
             if (!success)
             {
                 lock (_failedDownloads)
                 {
-                    _failedDownloads.Add(cardId);
+                    _failedDownloads.Add(downloadKey);
                 }
-                _logger.LogError("Failed to download any card art/render for {CardId} after trying fallbacks.", cardId);
+                _logger.LogError("Failed to download card {Type} for {CardId}", wantPortrait ? "portrait" : "render", cardId);
                 activity?.SetTag("download.success", false);
             }
             else

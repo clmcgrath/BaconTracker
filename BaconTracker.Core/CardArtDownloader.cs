@@ -21,16 +21,10 @@ public static class CardArtDownloader
         return null;
     }
 
-    /// <summary>
-    /// Downloads card art using prioritized fallback candidates.
-    /// Returns true if successfully downloaded or if files already exist.
-    /// </summary>
-    public static async Task<bool> DownloadCardArtAsync(HttpClient client, string cardId, string cacheDir)
+    public static async Task<bool> DownloadCardRenderAsync(HttpClient client, string cardId, string cacheDir)
     {
         string renderPath = Path.Combine(cacheDir, $"{cardId}.png");
-        string rawArtPath = Path.Combine(cacheDir, $"{cardId}_art.png");
-
-        if (File.Exists(renderPath) || File.Exists(rawArtPath))
+        if (File.Exists(renderPath))
         {
             return true;
         }
@@ -42,55 +36,48 @@ public static class CardArtDownloader
 
         string? stripped = GetStrippedCardId(cardId);
 
-        // 1. Try Wiki.gg Render (original)
-        if (await TryDownloadWikiGgRender(client, cardId, renderPath))
-        {
-            return true;
-        }
+        if (await TryDownloadWikiGgRender(client, cardId, renderPath)) return true;
+        if (stripped != null && await TryDownloadWikiGgRender(client, stripped, renderPath)) return true;
 
-        // 2. Try Wiki.gg Render (stripped)
-        if (stripped != null && await TryDownloadWikiGgRender(client, stripped, renderPath))
-        {
-            return true;
-        }
+        if (await TryDownloadHearthstoneJsonRender(client, cardId, renderPath)) return true;
+        if (stripped != null && await TryDownloadHearthstoneJsonRender(client, stripped, renderPath)) return true;
 
-        // 3. Try HearthstoneJSON Render (original)
-        if (await TryDownloadHearthstoneJsonRender(client, cardId, renderPath))
-        {
-            return true;
-        }
-
-        // 4. Try HearthstoneJSON Render (stripped)
-        if (stripped != null && await TryDownloadHearthstoneJsonRender(client, stripped, renderPath))
-        {
-            return true;
-        }
-
-        // 5. Try Firestone S3 CDN Render as the "almost last resort" (original)
-        if (await TryDownloadFirestoneRender(client, cardId, renderPath))
-        {
-            return true;
-        }
-
-        // 6. Try Firestone S3 CDN Render as the "almost last resort" (stripped)
-        if (stripped != null && await TryDownloadFirestoneRender(client, stripped, renderPath))
-        {
-            return true;
-        }
-
-        // 7. Try HearthstoneJSON Raw Art JPG as the final fallback (original)
-        if (await TryDownloadHearthstoneJsonRawArt(client, cardId, rawArtPath))
-        {
-            return true;
-        }
-
-        // 8. Try HearthstoneJSON Raw Art JPG as the final fallback (stripped)
-        if (stripped != null && await TryDownloadHearthstoneJsonRawArt(client, stripped, rawArtPath))
-        {
-            return true;
-        }
+        if (await TryDownloadFirestoneRender(client, cardId, renderPath)) return true;
+        if (stripped != null && await TryDownloadFirestoneRender(client, stripped, renderPath)) return true;
 
         return false;
+    }
+
+    public static async Task<bool> DownloadMinionPortraitAsync(HttpClient client, string cardId, string cacheDir)
+    {
+        string rawArtPath = Path.Combine(cacheDir, $"{cardId}_art.png");
+        if (File.Exists(rawArtPath))
+        {
+            return true;
+        }
+
+        if (client.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("BaconTracker/1.0 (https://github.com/bacontracker)");
+        }
+
+        string? stripped = GetStrippedCardId(cardId);
+
+        if (await TryDownloadHearthstoneJsonRawArt(client, cardId, rawArtPath)) return true;
+        if (stripped != null && await TryDownloadHearthstoneJsonRawArt(client, stripped, rawArtPath)) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Downloads card art using prioritized fallback candidates.
+    /// Returns true if successfully downloaded or if files already exist.
+    /// </summary>
+    public static async Task<bool> DownloadCardArtAsync(HttpClient client, string cardId, string cacheDir)
+    {
+        bool renderSuccess = await DownloadCardRenderAsync(client, cardId, cacheDir);
+        bool portraitSuccess = await DownloadMinionPortraitAsync(client, cardId, cacheDir);
+        return renderSuccess || portraitSuccess;
     }
 
     private static async Task<bool> TryDownloadWikiGgRender(HttpClient client, string id, string targetPath)
